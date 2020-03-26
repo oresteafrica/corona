@@ -1,4 +1,4 @@
-# Insert csv data about covid-19 from the github repository of Johns Hopkins University
+# Insert csv data about covid-19 from the github repository of Johns Hopkins University to MYSQL table
 
 PHP scripts that grab data from [JHU github repository](https://github.com/CSSEGISandData) JHU github repository, normalize available csv tables and insert them in a mysql table
 
