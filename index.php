@@ -42,7 +42,7 @@ switch ($opt) {
 		echo '<h2>' . count($dates_mysql) . ' records</h2>';
 //		echo '<pre>'; print_r($dates_mysql); echo '</pre>';
         break;
-    case 6: // 
+    case 6: // check double records in case of wrong update
         break;
     case 7: // 
         break;
@@ -60,6 +60,11 @@ switch ($opt) {
 }
 
 
+
+// ---------------------------------------------------------------------------------------------------------------------
+function check_double_records() {
+	$sql = 'SELECT State, COUNT(State), Country, COUNT(Country), Lastupdate, COUNT(Lastupdate), Confirmed, COUNT(Confirmed), Deaths, COUNT(Deaths), Recovered, COUNT(Recovered) FROM daily GROUP BY State, Country, Lastupdate, Confirmed, Deaths, Recovered HAVING COUNT(State) > 1 AND COUNT(Country) > 1 AND COUNT(Lastupdate) > 1 AND COUNT(Confirmed) > 1 AND COUNT(Deaths) > 1 AND COUNT(Recovered) > 1;';
+}
 // ---------------------------------------------------------------------------------------------------------------------
 function update_01($daily_url) {
 
