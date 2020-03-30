@@ -36,11 +36,11 @@ switch ($opt) {
 	case 3: // debug country list
 		echo '<pre>'; print_r(country_list()); echo '</pre>';
         break;
-    case 4: // 
-
+    case 4: // json country list
+		echo country_list(true);
         break;
-    case 5: // 
-
+    case 5: // json country data
+		echo country_data($lan,$_GET['countries'],true);
         break;
     case 6: // 
         break;
@@ -61,7 +61,7 @@ switch ($opt) {
 
 
 // ---------------------------------------------------------------------------------------------------------------------
-function country_data($lan,$country) {
+function country_data($lan,$country,$json = false) {
 	$db = database();
 	$sql = 'SELECT * FROM daily WHERE Country = "' . $country . '" ORDER BY Lastupdate DESC LIMIT 1';
 	$tabquery = $db->query($sql);
@@ -73,14 +73,19 @@ function country_data($lan,$country) {
 		foreach($tabquery as $row) {
 			$rows[] = $row;
 		}
-		$html_country = '<div style="width:100%;"><div>'.lan_interface($lan,3).':</div><div style="font-weight:bold;">'.$rows[0]['Country'].'</div></div>'.
+		$html_country = '<div style="width:100%;background-color:white;"><div>'.lan_interface($lan,3).':</div><div style="font-weight:bold;">'.$rows[0]['Country'].'</div></div>'.
+			'<div style="width:100%;background-color:white;">'.
 			'<div style="width:100%;"><div>'.lan_interface($lan,4).':</div><div style="font-weight:bold;">'.$rows[0]['Lastupdate'].'</div></div>'.
 			'<div style="width:100%;"><div>'.lan_interface($lan,5).':</div><div style="font-weight:bold;">'.$rows[0]['Confirmed'].'</div></div>'.
 			'<div style="width:100%;"><div>'.lan_interface($lan,6).':</div><div style="font-weight:bold;">'.$rows[0]['Deaths'].'</div></div>'.
-			'<div style="width:100%;"><div>'.lan_interface($lan,7).':</div><div style="font-weight:bold;">'.$rows[0]['Recovered'].'</div></div>';
+			'<div style="width:100%;"><div>'.lan_interface($lan,7).':</div><div style="font-weight:bold;">'.$rows[0]['Recovered'].'</div></div>'.
+			'</div>';
 	}
-	return $html_country;
-//	return $rows;
+	if ($json) {
+		return json_encode($rows);
+	} else {
+		return $html_country;
+	}
 }
 // ---------------------------------------------------------------------------------------------------------------------
 function lan_interface($lan,$ind) {
@@ -124,7 +129,7 @@ function country_list_to_html_select($lan) {
 	return $html_select;
 }
 // ---------------------------------------------------------------------------------------------------------------------
-function country_list() {
+function country_list($json = false) {
 	$db = database();
 	$sql = 'SELECT DISTINCT(Country) AS Country FROM daily ORDER BY Country ASC';
 	$tabquery = $db->query($sql);
@@ -136,7 +141,11 @@ function country_list() {
 		foreach($tabquery as $row) {
 			$country_list[] = trim(implode(null,$row));
 		}
-		return $country_list;
+		if ($json) {
+			return json_encode($country_list);
+		} else {
+			return $country_list;
+		}
 	}
 }
 // ---------------------------------------------------------------------------------------------------------------------
