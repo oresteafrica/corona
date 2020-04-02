@@ -1,10 +1,4 @@
-<!DOCTYPE HTML>
-<html>
-<head>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<title>corona mobile</title>
 
-<body>
 
 
 <?php
@@ -28,7 +22,7 @@ switch ($opt) {
     case 1: // first form
 		echo form_choose_country($lan);
         break;
-	case 2: // second form
+	case 2: // second form last day data
 		echo '<h1>'.lan_interface($lan,2).'</h1>';
 //		echo '<pre>'; print_r(country_data($lan,$_GET['countries'])); echo '</pre>';
 		echo country_data($lan,$_GET['countries']);
@@ -39,10 +33,11 @@ switch ($opt) {
     case 4: // json country list
 		echo country_list(true);
         break;
-    case 5: // json country data
+    case 5: // json last day country data
 		echo country_data($lan,$_GET['countries'],true);
         break;
-    case 6: // 
+    case 6: // json all country data
+		json_all_country_data($lan, $_GET['countries']);
         break;
     case 7: // 
         break;
@@ -59,7 +54,37 @@ switch ($opt) {
        exit;
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+function json_all_country_data($lan,$country) {
+	$db = database();
+	$sql = 'SELECT * FROM daily WHERE Country = "' . $country . '" ORDER BY Lastupdate ASC';
+	$tabquery = $db->query($sql);
+	$tabquery->setFetchMode(PDO::FETCH_ASSOC);
+	if ($tabquery->rowCount() == 0) {
+		return 0;
+	} else {
+		$rows = [];
+		$dates = [];
+		$confirmed = [];
+		$deaths = [];		
+		$recovered = [];
+		foreach($tabquery as $row) {
+			$rows[] = $row;
+			$dates[] = mb_substr($row['Lastupdate'],0,10);
+			$confirmed[] = $row['Confirmed'];
+			$deaths[] = $row['Deaths'];
+			$recovered[] = $row['Recovered'];
+		}
+	}
+	$data = array($row['Country'],$dates,$confirmed,$deaths,$recovered);
 
+//	print_r($data);
+
+	header("Content-Type: application/json");
+	echo json_encode($data);
+	
+	return 1;
+}
 // ---------------------------------------------------------------------------------------------------------------------
 function country_data($lan,$country,$json = false) {
 	$db = database();
@@ -213,5 +238,4 @@ function debug() {
 
 */
 ?>
-</body>
-</html>
+

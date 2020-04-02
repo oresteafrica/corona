@@ -90,6 +90,12 @@ function update_01($daily_url) {
 		// tested up to here
 		// $dates contains dates formatted MM-DD-YYYY as the csv file name
 	}
+	
+	if (count($dates) == 0) {
+		echo '$dates is empty';
+		return [];
+	}
+	
 	// read table in csv file and store in array
 	$line_array = [];
 	foreach($dates as $csv_file_name) {
