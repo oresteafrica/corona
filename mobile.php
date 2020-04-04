@@ -39,10 +39,11 @@ switch ($opt) {
     case 6: // json all country data
 		json_all_country_data($lan, $_GET['countries']);
         break;
-    case 7: // 
+    case 7: // json countries list
+		json_country_list();
         break;
     case 8: // 
-
+		json_all_country_data_aggregated($lan, $_GET['countries']);
         break;
     case 9: // 
 
@@ -54,6 +55,57 @@ switch ($opt) {
        exit;
 }
 
+// ---------------------------------------------------------------------------------------------------------------------
+function json_country_list() {
+	$db = database();
+	$sql = 'SELECT DISTINCT(Country) AS Country FROM daily ORDER BY Country ASC';
+	$tabquery = $db->query($sql);
+	$tabquery->setFetchMode(PDO::FETCH_ASSOC);
+	if ($tabquery->rowCount() == 0) {
+		return 0;
+	} else {
+		$country_list = [];
+		foreach($tabquery as $row) {
+			$country_list[] = trim($row['Country']);
+		}
+	}
+	header("Content-Type: application/json");
+	echo json_encode($country_list);
+	return 1;
+}
+// ---------------------------------------------------------------------------------------------------------------------
+function json_all_country_data_aggregated($lan,$country) {
+	$db = database();
+	$sql = 'SELECT Country, SUM(Confirmed) AS Confirmed, SUM(Deaths) AS Deaths, SUM(Recovered) AS Recovered, DATE(Lastupdate) AS Lastupdate FROM daily WHERE Country = "' . 
+		$country . 
+		'" GROUP BY DATE(Lastupdate) ORDER BY Lastupdate ASC';
+	$tabquery = $db->query($sql);
+	$tabquery->setFetchMode(PDO::FETCH_ASSOC);
+	if ($tabquery->rowCount() == 0) {
+		return 0;
+	} else {
+		$rows = [];
+		$dates = [];
+		$confirmed = [];
+		$deaths = [];		
+		$recovered = [];
+		foreach($tabquery as $row) {
+			$rows[] = $row;
+			$dates[] = mb_substr($row['Lastupdate'],0,10);
+			$confirmed[] = $row['Confirmed'];
+			$deaths[] = $row['Deaths'];
+			$recovered[] = $row['Recovered'];
+		}
+	}
+	$data = array($row['Country'],$dates,$confirmed,$deaths,$recovered);
+
+//	print_r($data);
+
+	header("Content-Type: application/json");
+	echo json_encode($data);
+	
+	return 1;
+}
 // ---------------------------------------------------------------------------------------------------------------------
 function json_all_country_data($lan,$country) {
 	$db = database();
