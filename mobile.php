@@ -1,6 +1,3 @@
-
-
-
 <?php
 
 ini_set('display_errors', 1);
@@ -69,7 +66,7 @@ function json_country_list() {
 			$country_list[] = trim($row['Country']);
 		}
 	}
-	header("Content-Type: application/json");
+//	header("Content-Type: application/json");
 	echo json_encode($country_list);
 	return 1;
 }
@@ -101,7 +98,7 @@ function json_all_country_data_aggregated($lan,$country) {
 
 //	print_r($data);
 
-	header("Content-Type: application/json");
+//	header("Content-Type: application/json");
 	echo json_encode($data);
 	
 	return 1;

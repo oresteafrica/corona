@@ -130,10 +130,15 @@ function update_01($daily_url) {
 			$line[2] = '"' . $line[2] . '"';
 			$s_line = implode(',',$line);
 			$line_array[] = $s_line;
-			$sql = "INSERT INTO daily (State, Country, Lastupdate, Confirmed, Deaths, Recovered, Latitude, Longitude) VALUES ($s_line)";
+			$sql = "INSERT INTO daily (State, Country, Lastupdate, Confirmed, Deaths, Recovered, Latitude, Longitude) VALUES ($s_line);";
+			
+			
+echo $sql . '<br />';
+			
 			if (! $db->query($sql)) {
 				echo "<hr />Error: " . $sql . "<br>" . $db->error;
 			}
+			
 		}
 	}
 	
@@ -146,30 +151,161 @@ function moveElement(&$array, $a, $b) {
 }
 // ---------------------------------------------------------------------------------------------------------------------
 function populate($daily_url) {
+	$ini_file = '../cron/corona.ini';
+	$ini_array = parse_ini_file($ini_file);
+	$ttok = $ini_array['ttok']; // github oauth token
 	$db = database();
 	$sql = 'SELECT * FROM daily';
 	$tabquery = $db->query($sql);
 	$tabquery->setFetchMode(PDO::FETCH_ASSOC);
-	if ($tabquery->rowCount() < 1) {
-		$fnames = get_json($daily_url,0); // array with csv file list, dates correspond to file name
-		foreach($fnames as $date) {
-			$curlopt_url = $daily_url . $date . '.csv';
-			$csv_array = get_json($curlopt_url,$date); // array of table contained in csv
-			foreach($csv_array as $record) { // $record ready for mysql
-				$sql = "INSERT INTO daily (State, Country, Lastupdate, Confirmed, Deaths, Recovered, Latitude, Longitude) VALUES ($record)";
-				echo $sql . '<hr />';
-				if (! $db->query($sql)) {
-					echo "<hr />Error: " . $sql . "<br>" . $db->error;
-				}
-			}
-		}
+	$daily_rows = $tabquery->rowCount();
+	
+	// debug
+	echo '$daily_rows = ' . $daily_rows . '<hr />';
+	
+	// database already populated
+	if ($daily_rows > 0) { $db = null; return 0; }
 
-	}	
-	$db->close();
+	$json = github_api($daily_url);
+
+	$fnames = [];
+	foreach($json as $item) {
+		$filename = pathinfo($item->name, PATHINFO_FILENAME);
+		
+		// do not include dates bigger than March 21, 2020
+		if (date_create_from_format('m-d-Y',$filename) > date_create_from_format('m-d-Y','02-21-2020')) { continue; }
+		
+		if (preg_match("/(0[1-9]|1[012])[- -.](0[1-9]|[12][0-9]|3[01])[- -.](19|20)\d\d/i",$filename)) { $fnames[] = $filename; }
+	}
+	// now $fnames is populated with all csv file names up to March 21, 2020
+	
+	// debug
+	echo '$fnames<br />';
+	echo '<pre>'; print_r($fnames); echo '</pre><hr />';
+
+	// get content of each csv file
+	foreach($fnames as $date) {
+		$filedate = $daily_url . $date . '.csv';
+
+		// debug
+		echo '<b>' . $date . '</b>';
+		echo '<br />==============<br />';
+
+		$jcsv = github_api($filedate);
+
+		// csv content as php string
+		$csv_string = base64_decode($jcsv->content);
+
+		// ini take off comma within double quotes
+		$pattern = '/(".+)(, )(.+")/';
+		$replacement = function($r) {
+			$r[2] = '-';
+			return $r[1] . $r[2] . $r[3];
+		};
+		$csv_content_modi = preg_replace_callback($pattern,$replacement,$csv_string);	
+		// end take off comma within double quotes
+
+		// Parse a CSV string into an array
+		$rows = str_getcsv($csv_content_modi, "\n");
+		// takes off field names, $rows contains just data from a single csv
+		array_shift($rows);
+
+		// ini process csv data
+		foreach($rows as $row) {
+			$record = process_jhu_csv($row,$date);
+			$sql = "INSERT INTO daily (State, Country, Lastupdate, Confirmed, Deaths, Recovered, Latitude, Longitude) VALUES ($record)";
+
+			// debug
+			echo $sql . '<hr />';
+		
+			if (! $db->query($sql)) {
+				echo "<hr />Error: " . $sql . "<br>" . $db->error;
+			}
+
+		} // foreach($rows as $row)
+
+	} // foreach($fnames as $date)
+			
+	$db = null;
 }
 // ---------------------------------------------------------------------------------------------------------------------
-function csv_table_raw($csv_content) {
-	return $csv_content;
+function process_jhu_csv($row,$date) {
+// return string formatted for mysql insert
+	
+	// convert $date to mysql date, each mysql statement will contain this date instead of the date indicated in csv
+	$mysqldate = substr($date,6,4) . '-' . substr($date,0,2) . '-' . substr($date,3,2);
+			
+	// Parse a CSV string into an array
+	$line = str_getcsv($row);
+	$lenline = count($line);
+		
+	for ($i = 0; $i < $lenline; $i++) {				
+		switch ($i) {
+			case 0:	// State
+			case 1:	// Country
+				if(substr($line[$i], 0,1) == '"' && substr( $line[$i],-1) == '"') {
+					$line[$i] = addslashes($line[$i]);
+				} else {
+					$line[$i] = '"' . $line[$i] . '"';
+				}
+				if (strlen($line[$i])==0) {
+					$line[$i] = '""';
+				}
+				break;
+			case 2:	// Lastupdate
+				$line[$i] = '"' . $mysqldate . '"';
+				break;
+			case 3:	// Confirmed
+			case 4:	// Deaths
+			case 5:	// Recovered
+			case 6:	// Latitude
+			case 7:	// Longitude
+				if (strlen($line[$i])==0) {
+					$line[$i] = 0;
+				}
+				break;
+			default:
+		} // switch		
+	} // for
+	// some csvs do not have values for latitude and longitude
+	for ($k = 0; $k < (8 - $lenline); $k++) {				
+		$line[] = 0;
+	}
+	$ret = implode(',',$line);
+	return $ret;
+}
+// ---------------------------------------------------------------------------------------------------------------------
+function github_api($uri) {
+	$ini_file = '../cron/corona.ini';
+	$ini_array = parse_ini_file($ini_file);
+	// github oauth token
+	$ttok = $ini_array['ttok'];
+	$curl = curl_init();
+	curl_setopt_array($curl, array(
+		CURLOPT_URL => $uri,
+		CURLOPT_RETURNTRANSFER => true,
+		CURLOPT_ENCODING => "",
+		CURLOPT_MAXREDIRS => 10,
+		CURLOPT_FOLLOWLOCATION => true,
+		CURLOPT_TIMEOUT => 500,
+		CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+		CURLOPT_CUSTOMREQUEST => "GET",
+		CURLOPT_HTTPHEADER => array(
+			"Accept: application/vnd.github.v3+json",
+			"Accept-Encoding: gzip, deflate, br",
+			"Cache-Control: no-cache",
+			"Connection: keep-alive",
+			"Referer: $uri",
+			"User-Agent: oresteafrica http://oreste.in",
+			"Authorization: token $ttok"
+		),
+	));
+	$response = curl_exec($curl);
+	$err = curl_error($curl);
+	curl_close($curl);
+	if ($err) { echo "cURL Error #:" . $err; exit; }
+	$json = json_decode($response);
+	return $json;
 }
 // ---------------------------------------------------------------------------------------------------------------------
 function csv_array_mysql_formatted($csv_content) {
