@@ -66,9 +66,9 @@ Recovered
 Active
 Combined_Key
 
-A window on data set is available at [http://oreste.parlatano.org/corona/JHU-daily/](http://oreste.parlatano.org/corona/JHU-daily/) 
+A window on data set is available [here](http://oreste.parlatano.org/corona/JHU-daily/) 
 
-
+An implementation of a web app is available [here](http://oreste.parlatano.org/corona/) 
 
 
 
