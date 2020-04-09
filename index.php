@@ -48,15 +48,20 @@ function update($daily_url) {
 	$tabquery = $db->query($sql);
 	$tabquery->setFetchMode(PDO::FETCH_ASSOC);
 	// highest date available in database table `daily`
-	$last_daily_date_string = $tabquery->fetch()['Lastupdate'];
+	$tabfetch = $tabquery->fetch();
+	$last_daily_date_string = $tabfetch['Lastupdate'];
+	$lastdate = date_create_from_format('!Y-m-d',$last_daily_date_string);
 
 	$json = github_api($daily_url);
 	$fnames = [];
+
 	foreach($json as $item) {
 		$filename = pathinfo($item->name, PATHINFO_FILENAME);		
 		// do not include dates already present in database table `daily`
-		if (date_create_from_format('m-d-Y',$filename) <= date_create_from_format('YYYY-m-d',$last_daily_date_string)) { continue; }
-		if (preg_match("/(0[1-9]|1[012])[- -.](0[1-9]|[12][0-9]|3[01])[- -.](19|20)\d\d/i",$filename)) { $fnames[] = $filename; }
+		$filedate = date_create_from_format('!m-d-Y',$filename);
+		if (  $filedate > $lastdate ) {
+			if (preg_match("/(0[1-9]|1[012])[- -.](0[1-9]|[12][0-9]|3[01])[- -.](19|20)\d\d/i",$filename)) { $fnames[] = $filename; }
+		}
 	}
 	// now $fnames is populated with all csv file names
 
@@ -110,7 +115,7 @@ function update($daily_url) {
 			// debug
 			echo $record . '<hr />';
 		
-			if (! $db->query($sql)) { echo "<hr />Error: " . $sql . "<br>" . $db->error; }
+//			if (! $db->query($sql)) { echo "<hr />Error: " . $sql . "<br>" . $db->error; }
 		}
 
 	}
