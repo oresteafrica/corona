@@ -115,7 +115,7 @@ function update($daily_url) {
 			// debug
 			echo $record . '<hr />';
 		
-//			if (! $db->query($sql)) { echo "<hr />Error: " . $sql . "<br>" . $db->error; }
+			if (! $db->query($sql)) { echo "<hr />Error: " . $sql . "<br>" . $db->error; }
 		}
 
 	}
