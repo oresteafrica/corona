@@ -1,0 +1,35 @@
+#corona_main {
+	font-family:Arial;
+	width:100%;
+}
+. corona_panel {
+	width:100%;
+}
+#corona_choose {
+
+}
+#corona_country {
+	float:left;
+}
+#corona_lan {
+	float:right;
+}
+#corona_text {
+
+}
+#corona_graph {
+
+}
+table {
+	border-collapse: collapse;
+	font-size:x-small;
+}
+table td {
+	border:1px solid black;
+	padding:2px;
+}
+#corona_source {
+	font-size:small;
+	border: solid 1px black;
+	padding:10px;
+}

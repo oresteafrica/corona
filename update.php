@@ -1,36 +1,21 @@
 <?php
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
-ini_set('max_execution_time', 1200);
-
-// opt = option for switch
-if (check_get('opt') == 'ok') { $opt = $_GET['opt']; }  else { exit; };
-// csv = csv file name
-if ( isset($_GET['csv']) ) { $csv = $_GET['csv']; }
-
 $daily_url = 'https://api.github.com/repos/CSSEGISandData/COVID-19/contents/csse_covid_19_data/csse_covid_19_daily_reports/';
 
-switch ($opt) {
-    case 1: // list files in directory
-		$fnames = github_api($daily_url);
-		echo '<pre>'; print_r($fnames); echo '</pre>';
-        break;
-	case 2: // get csv content
-		$csv_array = github_api($daily_url . $csv . '.csv');
-		echo '<pre>'; print_r($csv_array); echo '</pre>';
-        break;
-	case 3: // populate data
-		populate($daily_url);
-        break;
-    case 4: // update data
-		update($daily_url);
-        break;
-    default:
-       exit;
-}
+
+echo '<html>';
+echo '<head>';
+echo '<meta http-equiv="content-type" content="text/html; charset=UTF-8" />';
+echo '</head>';
+echo '<body>';
+
+update($daily_url);
+
+echo '</body>';
+echo '</html>';
+
+
+
 // ---------------------------------------------------------------------------------------------------------------------
 function moveElement(&$array, $a, $b) {
     $out = array_splice($array, $a, 1);
@@ -40,7 +25,7 @@ function moveElement(&$array, $a, $b) {
 function update($daily_url) {
 // check the Lastupdate	date at table `daily` start update after that date
 
-	$ini_file = '../cron/corona.ini';
+	$ini_file = 'corona.ini';
 	$ini_array = parse_ini_file($ini_file);
 	$ttok = $ini_array['ttok']; // github oauth token
 	$db = database();
@@ -64,6 +49,9 @@ function update($daily_url) {
 		}
 	}
 	// now $fnames is populated with all csv file names
+	
+	echo '$fnames<br />';
+	echo '<pre>'; print_r($fnames); echo '</pre>';
 
 	// get content of each csv file
 	foreach($fnames as $date) {
@@ -86,9 +74,9 @@ function update($daily_url) {
 		// Parse a CSV string into an array
 		$rows = str_getcsv($csv_string, "\n");
 		$rows_head = $rows[0];
+
 		// takes off field names, $rows contains just data from a single csv
 		array_shift($rows);
-
 
 		foreach($rows as $row) {
 			$csv_line = str_getcsv($row);
@@ -99,6 +87,15 @@ function update($daily_url) {
 			// escape special chars
 			array_walk_recursive($csv_line, function(&$item, $key) { $item = addslashes($item); });
 			$record = '';
+						
+			// correction due to change of structure on May 29, 2020
+			$critical_date = date_create_from_format('!m-d-Y','05-28-2020');
+			$file_date = date_create_from_format('!m-d-Y',$date);
+			if ( $file_date > $critical_date ) {
+				array_pop($csv_line);
+				array_pop($csv_line);
+			}			
+						
 			if ( $length_csv_line > 8 ) {
 				array_shift($csv_line);
 				array_shift($csv_line);
@@ -111,95 +108,17 @@ function update($daily_url) {
 			} else {
 				$record = process_jhu_csv($row,$date);
 			}
+
 			$sql = "INSERT INTO daily (State, Country, Lastupdate, Confirmed, Deaths, Recovered, Latitude, Longitude) VALUES ($record)";
 
 			// debug
 			echo $record . '<hr />';
 		
-			if (! $db->query($sql)) { echo "<hr />Error: " . $sql . "<br>" . $db->error; }
+			if (! $db->query($sql)) { echo '<hr />Error:<br />' . $sql . '<br /><br />' . $db->error; }
 		}
 
 	}
 
-}
-// ---------------------------------------------------------------------------------------------------------------------
-function populate($daily_url) {
-	$ini_file = '../cron/corona.ini';
-	$ini_array = parse_ini_file($ini_file);
-	$ttok = $ini_array['ttok']; // github oauth token
-	$db = database();
-	$sql = 'SELECT * FROM daily';
-	$tabquery = $db->query($sql);
-	$tabquery->setFetchMode(PDO::FETCH_ASSOC);
-	$daily_rows = $tabquery->rowCount();
-	
-	// debug
-	echo '$daily_rows = ' . $daily_rows . '<hr />';
-	
-	// database already populated
-	if ($daily_rows > 0) { $db = null; return 0; }
-
-	$json = github_api($daily_url);
-
-	$fnames = [];
-	foreach($json as $item) {
-		$filename = pathinfo($item->name, PATHINFO_FILENAME);
-		
-		// do not include dates bigger than February 21, 2020
-		if (date_create_from_format('m-d-Y',$filename) > date_create_from_format('m-d-Y','02-21-2020')) { continue; }
-		
-		if (preg_match("/(0[1-9]|1[012])[- -.](0[1-9]|[12][0-9]|3[01])[- -.](19|20)\d\d/i",$filename)) { $fnames[] = $filename; }
-	}
-	// now $fnames is populated with all csv file names up to February 21, 2020
-	
-	// debug
-	echo '$fnames<br />';
-	echo '<pre>'; print_r($fnames); echo '</pre><hr />';
-
-	// get content of each csv file
-	foreach($fnames as $date) {
-		$filedate = $daily_url . $date . '.csv';
-
-		// debug
-		echo '<b>' . $date . '</b>';
-		echo '<br />==============<br />';
-
-		$jcsv = github_api($filedate);
-
-		// csv content as php string
-		$csv_string = base64_decode($jcsv->content);
-
-		// ini take off comma within double quotes
-		$pattern = '/(".+)(, )(.+")/';
-		$replacement = function($r) {
-			$r[2] = '-';
-			return $r[1] . $r[2] . $r[3];
-		};
-		$csv_content_modi = preg_replace_callback($pattern,$replacement,$csv_string);	
-		// end take off comma within double quotes
-
-		// Parse a CSV string into an array
-		$rows = str_getcsv($csv_content_modi, "\n");
-		// takes off field names, $rows contains just data from a single csv
-		array_shift($rows);
-
-		// ini process csv data
-		foreach($rows as $row) {
-			$record = process_jhu_csv($row,$date);
-			$sql = "INSERT INTO daily (State, Country, Lastupdate, Confirmed, Deaths, Recovered, Latitude, Longitude) VALUES ($record)";
-
-			// debug
-			echo $sql . '<hr />';
-		
-			if (! $db->query($sql)) {
-				echo "<hr />Error: " . $sql . "<br>" . $db->error;
-			}
-
-		} // foreach($rows as $row)
-
-	} // foreach($fnames as $date)
-			
-	$db = null;
 }
 // ---------------------------------------------------------------------------------------------------------------------
 function process_jhu_csv($row,$date) {
@@ -249,7 +168,7 @@ function process_jhu_csv($row,$date) {
 }
 // ---------------------------------------------------------------------------------------------------------------------
 function github_api($uri) {
-	$ini_file = '../cron/corona.ini';
+	$ini_file = 'corona.ini';
 	$ini_array = parse_ini_file($ini_file);
 	// github oauth token
 	$ttok = $ini_array['ttok'];
@@ -282,7 +201,7 @@ function github_api($uri) {
 }
 // ---------------------------------------------------------------------------------------------------------------------
 function database() {
-	$ini_file = '../cron/corona.ini';
+	$ini_file = 'corona.ini';
 	$ini_array = parse_ini_file($ini_file);
 	$user = $ini_array['user'];
 	$pass = $ini_array['pass'];
@@ -314,40 +233,4 @@ Table daily
 */
 }
 // ---------------------------------------------------------------------------------------------------------------------
-function check_get($var) {
-	$ret = 'ok'; $a = '0'; $b = '0'; $c = '0'; $d = '0'; $chk = true;
-	if (!isset($_GET[$var])) { $a = '1'; $chk = false; }
-	if ($_GET[$var] === '') { $b = '1'; $chk = false; }
-	if ($_GET[$var] === null) { $c = '1'; $chk = false; }
-//	if (empty($_GET[$var])) { $d = '1'; $chk = false; }
-	if ($chk) { return 'ok'; } else { return $a . $b . $c . $d; }
-}
-// ---------------------------------------------------------------------------------------------------------------------
-/*
-
-starting from 12/04/2020
-
-Province_State
-Country_Region
-Last_Update
-Lat
-Long_
-Confirmed
-Deaths
-Recovered
-Active
-Admin2
-FIPS
-Combined_Key
-Incident_Rate
-People_Tested
-People_Hospitalized
-UID
-ISO3
-
-
-
-
-
-*/
 ?>
